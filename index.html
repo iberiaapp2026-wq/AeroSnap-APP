@@ -698,6 +698,7 @@ let syncing = false;
 async function trySyncQueue() {
   if (syncing) return;
   syncing = true;
+  refreshPendingBadge();
   try {
     const items = await queueGetAll();
     for (const item of items) {
@@ -728,7 +729,7 @@ async function refreshPendingBadge() {
   try {
     const items = await queueGetAll();
     if (items.length > 0) {
-      badge.textContent = items.length + ' pending upload';
+      badge.textContent = (syncing ? '⇧ uploading ' : '') + items.length + (items.length === 1 ? ' pending' : ' pending');
       badge.style.display = 'block';
     } else {
       badge.style.display = 'none';
@@ -743,6 +744,10 @@ refreshPendingBadge();
 
 // ---------- Aircraft / project state ----------
 let currentMatricula = null;
+// Last item number the server actually confirmed (i.e. items already in the
+// sheet). The visible "next item" preview is this number plus however many
+// items for this aircraft are still sitting in the local upload queue.
+let baseNextItemNum = 0;
 
 const projectScreen = document.getElementById('projectScreen');
 const appScreen = document.getElementById('appScreen');
@@ -804,11 +809,12 @@ async function openAircraft(matricula, statusEl) {
       return;
     }
     currentMatricula = data.matricula;
+    baseNextItemNum = parseInt(String(data.nextItem).replace(/\D/g, ''), 10) || 0;
     document.getElementById('aircraftTag').textContent = currentMatricula;
-    document.getElementById('nextItemLabel').textContent = 'next: ' + data.nextItem;
-    document.getElementById('willBeLabel').textContent = data.nextItem;
     projectScreen.style.display = 'none';
     appScreen.classList.add('show');
+    await updateNextItemPreview();
+    refreshPendingBadge();
   } catch (err) {
     statusEl.textContent = 'Could not connect. Check your connection and try again.';
     statusEl.className = 'project-status err';
@@ -1038,16 +1044,49 @@ function renderPhotoGrid() {
 }
 renderPhotoGrid();
 
-photoInput.addEventListener('change', (e) => {
+// Resize + re-encode as JPEG before storing. Phone camera photos are often
+// 3-12 MB; this brings them down to a few hundred KB so both the local
+// queue and the eventual upload to Drive are much faster.
+function compressImage(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (ev) => { img.src = ev.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim) {
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+photoInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    photos.push(ev.target.result);
-    renderPhotoGrid();
-  };
-  reader.readAsDataURL(file);
   photoInput.value = '';
+  try {
+    const dataUrl = await compressImage(file, 1600, 0.75);
+    photos.push(dataUrl);
+    renderPhotoGrid();
+  } catch (err) {
+    // Fallback: store the original if compression fails for any reason.
+    const reader = new FileReader();
+    reader.onload = (ev) => { photos.push(ev.target.result); renderPhotoGrid(); };
+    reader.readAsDataURL(file);
+  }
 });
 
 function showStatus(text, type) {
@@ -1107,6 +1146,7 @@ submitBtn.addEventListener('click', async () => {
     return;
   }
 
+  const previewCode = document.getElementById('willBeLabel').textContent;
   const payload = {
     action: 'submitItem',
     matricula: currentMatricula,
@@ -1118,41 +1158,31 @@ submitBtn.addEventListener('click', async () => {
     photos
   };
 
+  // Always save to the local queue first and return control to the inspector
+  // immediately — the actual upload to Drive happens in the background, so a
+  // slow or flaky connection never blocks the next item. This also means the
+  // app behaves identically online or offline: nothing is lost either way.
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving…';
-
-  // No connection at all: skip straight to the offline queue.
-  if (!navigator.onLine) {
+  try {
     await queueAdd(payload);
-    showStatus('No connection. Saved on this device — it will upload automatically once you are back online.', 'info');
-    resetForm();
-    refreshPendingBadge();
+  } catch (err) {
+    showStatus('Could not save on this device: ' + err, 'err');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Save item';
     return;
   }
 
-  showStatus('Saving to Google Drive…', 'info');
-  try {
-    const data = await postToServer(payload);
-    if (data.ok) {
-      showStatus('Saved as ' + data.itemNumber + '. Folder created in Drive.', 'ok');
-      resetForm();
-      fetchNextItemPreview();
-      trySyncQueue();
-    } else {
-      showStatus('Error: ' + (data.error || 'unknown'), 'err');
-    }
-  } catch (err) {
-    // Connection dropped mid-request: don't lose the item, queue it instead.
-    await queueAdd(payload);
-    showStatus('Connection lost. Saved on this device — it will upload automatically once you are back online.', 'info');
-    resetForm();
-    refreshPendingBadge();
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Save item';
-  }
+  showStatus('Saved as ' + previewCode + ' on this device. Uploading to Drive in the background…', 'info');
+  resetForm();
+  await refreshPendingBadge();
+  await updateNextItemPreview();
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Save item';
+
+  // Fire-and-forget: kick off (or continue) the background sync. Deliberately
+  // not awaited so the inspector isn't held up waiting for the photo upload.
+  trySyncQueue();
 });
 
 function resetForm() {
@@ -1170,22 +1200,37 @@ function resetForm() {
   ataSuggestionEl.classList.remove('show');
 }
 
+// Authoritative refresh: asks the server how many items actually exist for
+// this aircraft (used after a background sync confirms an upload).
 async function fetchNextItemPreview() {
-  const label = document.getElementById('nextItemLabel');
-  const willBe = document.getElementById('willBeLabel');
   if (!currentMatricula || APPS_SCRIPT_URL.includes('PEGA_AQUI')) return;
   try {
     const res = await fetch(APPS_SCRIPT_URL + '?action=list&matricula=' + encodeURIComponent(currentMatricula));
     const data = await res.json();
     if (data.ok) {
-      const n = data.items.length;
-      const code = 'ITEM' + String(n).padStart(3, '0');
-      label.textContent = 'next: ' + code;
-      willBe.textContent = code;
+      baseNextItemNum = data.items.length;
+      await updateNextItemPreview();
     }
   } catch (err) {
-    label.textContent = 'offline';
+    // Offline or unreachable — leave the last known number as-is.
   }
+}
+
+// Optimistic, instant refresh: server-confirmed count + items for this
+// aircraft still waiting in the local queue. Doesn't touch the network, so
+// it can run right after every save without any delay.
+async function updateNextItemPreview() {
+  const label = document.getElementById('nextItemLabel');
+  const willBe = document.getElementById('willBeLabel');
+  if (!currentMatricula) return;
+  let pendingCount = 0;
+  try {
+    const items = await queueGetAll();
+    pendingCount = items.filter(i => i.payload.matricula === currentMatricula).length;
+  } catch (err) { /* ignore */ }
+  const code = 'ITEM' + String(baseNextItemNum + pendingCount).padStart(3, '0');
+  label.textContent = 'next: ' + code;
+  willBe.textContent = code;
 }
 
 // ---------- Edit lists panel ----------
