@@ -1,0 +1,12 @@
+{
+  "name": "Inspección de Aeronave",
+  "short_name": "Inspección",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1B2129",
+  "theme_color": "#1B2129",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
