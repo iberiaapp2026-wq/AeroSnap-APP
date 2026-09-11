@@ -1,4 +1,4 @@
-const CACHE = 'inspeccion-avion-v2';
+const CACHE = 'inspeccion-avion-v3';
 const ASSETS = ['./index.html', './manifest.json', './app-icon-192.png', './app-icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -7,6 +7,11 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)))
+    )
+  );
   self.clients.claim();
 });
 
