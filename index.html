@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1B2129">
-<title>Inspección de Aeronave</title>
+<title>Aircraft Inspection</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -17,7 +17,6 @@
     --text:#EDEFF2;
     --muted:#8B95A3;
     --amber:#F2A20C;
-    --amber-dim:#5C4415;
     --green:#3FA672;
     --red:#E5484D;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -38,6 +37,7 @@
     display:flex;
     align-items:baseline;
     justify-content:space-between;
+    gap:10px;
   }
   header h1{
     font-size:17px;
@@ -49,6 +49,7 @@
     font-family:var(--mono);
     font-size:13px;
     color:var(--amber);
+    white-space:nowrap;
   }
   main{
     max-width:520px;
@@ -58,11 +59,25 @@
   .section{
     margin-bottom:28px;
   }
+  .section-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
   .section-label{
     font-size:12px;
     color:var(--muted);
-    margin-bottom:10px;
     font-weight:600;
+  }
+  .edit-link{
+    background:none;
+    border:none;
+    color:var(--amber);
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    padding:2px 0;
   }
   .photo-box{
     background:var(--surface);
@@ -128,6 +143,26 @@
     background-repeat:no-repeat;
     background-position:right 14px center;
   }
+  .suggestion{
+    margin-top:8px;
+    font-size:13px;
+    color:var(--muted);
+    display:none;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .suggestion.show{display:flex;}
+  .suggestion .chip{
+    background:var(--surface-2);
+    border:1px solid var(--amber);
+    color:var(--amber);
+    border-radius:20px;
+    padding:4px 10px;
+    font-size:12px;
+    cursor:pointer;
+    font-family:var(--mono);
+  }
   .translate-row{
     display:flex;
     gap:10px;
@@ -160,6 +195,10 @@
     background:var(--surface-2);
     color:var(--muted);
     cursor:not-allowed;
+  }
+  .btn-small{
+    padding:8px 12px;
+    font-size:13px;
   }
   .en-box{
     background:var(--surface-2);
@@ -198,13 +237,98 @@
     margin-top:6px;
   }
   .footer-space{height:20px;}
+
+  /* Edit panel */
+  .overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.55);
+    z-index:50;
+    align-items:flex-end;
+  }
+  .overlay.show{display:flex;}
+  .edit-sheet{
+    background:var(--bg);
+    border-top:1px solid var(--rule);
+    border-radius:16px 16px 0 0;
+    width:100%;
+    max-height:88vh;
+    overflow-y:auto;
+    padding:20px;
+  }
+  .edit-sheet h2{
+    font-size:16px;
+    margin:0 0 4px;
+  }
+  .edit-sheet .sub{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:18px;
+  }
+  .edit-group{
+    margin-bottom:22px;
+  }
+  .edit-group h3{
+    font-size:13px;
+    color:var(--amber);
+    margin:0 0 10px;
+    text-transform:none;
+  }
+  .edit-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:8px;
+    align-items:center;
+  }
+  .edit-row input{
+    flex:1;
+  }
+  .edit-row .code-input{
+    flex:0 0 56px;
+  }
+  .remove-btn{
+    background:none;
+    border:none;
+    color:var(--red);
+    font-size:20px;
+    cursor:pointer;
+    line-height:1;
+    padding:6px;
+    flex:0 0 auto;
+  }
+  .add-row-btn{
+    background:none;
+    border:1px dashed var(--rule);
+    color:var(--muted);
+    border-radius:6px;
+    padding:10px;
+    width:100%;
+    cursor:pointer;
+    font-size:13px;
+  }
+  .edit-sheet-actions{
+    display:flex;
+    gap:10px;
+    position:sticky;
+    bottom:0;
+    background:var(--bg);
+    padding-top:12px;
+    margin-top:8px;
+  }
+  .edit-sheet-actions .btn{flex:1;}
+  .locked-note{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:2px;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Inspección de aeronave</h1>
-  <span class="next-item" id="nextItemLabel">preparando…</span>
+  <h1>Aircraft Inspection</h1>
+  <span class="next-item" id="nextItemLabel">preparing…</span>
 </header>
 
 <main>
@@ -212,11 +336,11 @@
   <div id="statusMsg" class="status-msg"></div>
 
   <div class="section">
-    <div class="section-label">FOTOGRAFÍA</div>
+    <div class="section-label">PHOTOGRAPH</div>
     <div class="photo-box" id="photoBox">
       <div class="placeholder" id="photoPlaceholder">
         <span class="icon">📷</span>
-        Toca para sacar la foto
+        Tap to take photo
       </div>
       <img id="photoPreview" style="display:none;">
     </div>
@@ -224,80 +348,219 @@
   </div>
 
   <div class="section">
-    <div class="section-label">DATOS DE LA INSPECCIÓN</div>
+    <div class="section-head">
+      <div class="section-label">INSPECTION DATA</div>
+      <button class="edit-link" id="openEditBtn">Edit lists</button>
+    </div>
 
     <div class="field">
       <label class="field-label" for="ata">ATA</label>
-      <input type="text" id="ata" placeholder="Ej: 32" list="ataList" inputmode="numeric">
-      <datalist id="ataList">
-        <option value="05">05 - Mantenimiento periódico</option>
-        <option value="21">21 - Aire acondicionado</option>
-        <option value="27">27 - Mandos de vuelo</option>
-        <option value="32">32 - Tren de aterrizaje</option>
-        <option value="52">52 - Puertas</option>
-        <option value="53">53 - Fuselaje</option>
-        <option value="57">57 - Alas</option>
-        <option value="71">71 - Motores</option>
-      </datalist>
+      <select id="ata"></select>
+      <div class="suggestion" id="ataSuggestion">
+        Suggested from description: <span class="chip" id="ataSuggestionChip"></span>
+      </div>
     </div>
 
     <div class="field">
-      <label class="field-label" for="area">Área</label>
-      <select id="area">
-        <option value="">Selecciona…</option>
-        <option>Fuselaje</option>
-        <option>Cabina</option>
-        <option>Trenes de aterrizaje</option>
-        <option>Alas</option>
-        <option>Empenaje</option>
-        <option>Motores</option>
-        <option>Compartimento de carga</option>
-        <option>Otro</option>
-      </select>
+      <label class="field-label" for="area">Area</label>
+      <select id="area"></select>
     </div>
 
     <div class="field">
-      <label class="field-label" for="subarea">Subárea</label>
-      <input type="text" id="subarea" placeholder="Ej: lado técnico">
+      <label class="field-label" for="subarea">Subarea</label>
+      <input type="text" id="subarea" placeholder="e.g. technical side">
     </div>
 
     <div class="field">
-      <label class="field-label" for="descripcion">Descripción</label>
+      <label class="field-label" for="descripcion">Damage description (Spanish)</label>
       <textarea id="descripcion" placeholder="Describe el hallazgo…"></textarea>
     </div>
 
     <div class="field">
-      <label class="field-label" for="responsable">Responsable</label>
-      <input type="text" id="responsable" placeholder="Nombre del inspector">
+      <label class="field-label" for="responsable">Assigned to</label>
+      <select id="responsable"></select>
+      <input type="text" id="responsableGuest" placeholder="Enter name" style="display:none; margin-top:8px;">
     </div>
   </div>
 
   <div class="section">
-    <div class="section-label">TRADUCCIÓN</div>
+    <div class="section-label">TRANSLATION</div>
     <div class="translate-row">
-      <button class="btn btn-ghost" id="translateBtn">Traducir a inglés</button>
+      <button class="btn btn-ghost" id="translateBtn">Translate to English</button>
     </div>
     <div class="en-box" id="enBox">
-      <textarea id="descripcionEn" placeholder="Traducción (editable)"></textarea>
+      <textarea id="descripcionEn" placeholder="Translation (editable)"></textarea>
     </div>
   </div>
 
   <div class="section">
-    <button class="btn btn-primary" id="submitBtn">Guardar item</button>
-    <div class="config-note">Se guardará como <span id="willBeLabel" class="item-code">item 000</span></div>
+    <button class="btn btn-primary" id="submitBtn">Save item</button>
+    <div class="config-note">Will be saved as <span id="willBeLabel" class="item-code">item 000</span></div>
   </div>
 
   <div class="footer-space"></div>
 </main>
 
+<!-- Edit lists panel -->
+<div class="overlay" id="editOverlay">
+  <div class="edit-sheet">
+    <h2>Edit lists</h2>
+    <div class="sub">Changes are saved on this device only.</div>
+
+    <div class="edit-group">
+      <h3>Area</h3>
+      <div id="areaEditRows"></div>
+      <button class="add-row-btn" id="addAreaBtn">+ Add area</button>
+    </div>
+
+    <div class="edit-group">
+      <h3>ATA</h3>
+      <div id="ataEditRows"></div>
+      <button class="add-row-btn" id="addAtaBtn">+ Add ATA chapter</button>
+    </div>
+
+    <div class="edit-group">
+      <h3>Assigned to</h3>
+      <div id="respEditRows"></div>
+      <button class="add-row-btn" id="addRespBtn">+ Add person</button>
+      <div class="locked-note">"Guest user" is always kept as the last option.</div>
+    </div>
+
+    <div class="edit-sheet-actions">
+      <button class="btn btn-ghost" id="resetListsBtn">Reset to default</button>
+      <button class="btn btn-ghost" id="cancelEditBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveListsBtn" style="width:auto;">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
-// CONFIGURACIÓN — pega aquí la URL de tu Apps Script desplegado
+// CONFIG — paste your Apps Script URL here
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVuLxXgBQDHmyaJw0Zv0dtHiYyeJUB--UR5oasz5YH_kYKXRkzIh7LBIGf0MZ7QOQyMA/exec';
+const APPS_SCRIPT_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
 
+// ---------- Default lists ----------
+const DEFAULT_AREAS = ['Fuselage', 'Cabin', 'Landing gear', 'Wings', 'Empennage', 'Engines', 'Cargo compartment', 'Other'];
+
+const DEFAULT_ATA = [
+  { code: '05', label: '05 - Periodic maintenance' },
+  { code: '21', label: '21 - Air conditioning' },
+  { code: '25', label: '25 - Equipment / furnishings' },
+  { code: '27', label: '27 - Flight controls' },
+  { code: '32', label: '32 - Landing gear' },
+  { code: '52', label: '52 - Doors' },
+  { code: '53', label: '53 - Fuselage' },
+  { code: '57', label: '57 - Wings' },
+  { code: '71', label: '71 - Engines' }
+];
+
+const DEFAULT_RESPONSABLES = [
+  'Álvaro', 'Javier M.', 'Claudia', 'Salvador', 'Alejandra', 'Israel',
+  'Joaquín', 'Sergio', 'Charlotte', 'Lorea', 'Laura', 'Pablo',
+  'Herminio', 'Rodrigo', 'Ángel', 'Santiago', 'Roberto', 'Javier G.'
+];
+const GUEST_OPTION = 'Guest user';
+
+// Keywords (Spanish, matched against the damage description) -> ATA code
+const ATA_KEYWORDS = [
+  { code: '32', words: ['tren de aterrizaje', 'tren', 'rueda', 'neumatico', 'neumático', 'llanta', 'freno'] },
+  { code: '71', words: ['motor', 'turbina', 'capot', 'gondola', 'góndola'] },
+  { code: '57', words: ['ala', 'alas', 'winglet', 'flap', 'slat'] },
+  { code: '52', words: ['puerta', 'escotilla', 'compuerta'] },
+  { code: '53', words: ['fuselaje', 'panel', 'remache', 'carcasa'] },
+  { code: '21', words: ['aire acondicionado', 'climatiz', 'ventilacion', 'ventilación'] },
+  { code: '27', words: ['timon', 'timón', 'aleron', 'alerón', 'mando de vuelo', 'mandos de vuelo'] },
+  { code: '25', words: ['asiento', 'cabina', 'interior', 'moqueta', 'tapiceria', 'tapicería'] }
+];
+
+// ---------- State (loaded lists, possibly customised) ----------
+let areas = [];
+let ataChapters = [];
+let responsables = [];
+
+function loadLists() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('inspeccionLists') || 'null');
+    if (saved && saved.areas && saved.ata && saved.responsables) {
+      areas = saved.areas;
+      ataChapters = saved.ata;
+      responsables = saved.responsables;
+      return;
+    }
+  } catch (e) {}
+  areas = DEFAULT_AREAS.slice();
+  ataChapters = DEFAULT_ATA.map(a => ({ ...a }));
+  responsables = DEFAULT_RESPONSABLES.slice();
+}
+
+function saveLists() {
+  localStorage.setItem('inspeccionLists', JSON.stringify({ areas, ata: ataChapters, responsables }));
+}
+
+loadLists();
+
+// ---------- Render selects ----------
+function renderAreaSelect() {
+  const sel = document.getElementById('area');
+  sel.innerHTML = '<option value="">Select…</option>' + areas.map(a => `<option value="${a}">${a}</option>`).join('');
+}
+function renderAtaSelect() {
+  const sel = document.getElementById('ata');
+  sel.innerHTML = '<option value="">Select…</option>' + ataChapters.map(a => `<option value="${a.code}">${a.label}</option>`).join('');
+}
+function renderResponsableSelect() {
+  const sel = document.getElementById('responsable');
+  sel.innerHTML = '<option value="">Select…</option>' +
+    responsables.map(r => `<option value="${r}">${r}</option>`).join('') +
+    `<option value="${GUEST_OPTION}">${GUEST_OPTION}</option>`;
+}
+document.getElementById('responsable').addEventListener('change', (e) => {
+  const guestInput = document.getElementById('responsableGuest');
+  guestInput.style.display = e.target.value === GUEST_OPTION ? 'block' : 'none';
+});
+
+renderAreaSelect();
+renderAtaSelect();
+renderResponsableSelect();
+
+// ---------- ATA suggestion from description text ----------
+const descripcionEl = document.getElementById('descripcion');
+const ataSuggestionEl = document.getElementById('ataSuggestion');
+const ataSuggestionChip = document.getElementById('ataSuggestionChip');
+let lastSuggestedCode = null;
+
+descripcionEl.addEventListener('input', debounce(() => {
+  const text = descripcionEl.value.toLowerCase();
+  let match = null;
+  for (const entry of ATA_KEYWORDS) {
+    if (entry.words.some(w => text.includes(w))) { match = entry.code; break; }
+  }
+  const ataSelect = document.getElementById('ata');
+  if (match && ataChapters.some(a => a.code === match) && ataSelect.value !== match) {
+    lastSuggestedCode = match;
+    const chapter = ataChapters.find(a => a.code === match);
+    ataSuggestionChip.textContent = chapter.label;
+    ataSuggestionEl.classList.add('show');
+  } else {
+    ataSuggestionEl.classList.remove('show');
+  }
+}, 400));
+
+ataSuggestionChip.addEventListener('click', () => {
+  if (lastSuggestedCode) {
+    document.getElementById('ata').value = lastSuggestedCode;
+    ataSuggestionEl.classList.remove('show');
+  }
+});
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ---------- Photo capture ----------
 let photoBase64 = null;
-let translatedText = '';
 
 const photoBox = document.getElementById('photoBox');
 const photoInput = document.getElementById('photoInput');
@@ -306,7 +569,7 @@ const photoPlaceholder = document.getElementById('photoPlaceholder');
 const statusMsg = document.getElementById('statusMsg');
 const translateBtn = document.getElementById('translateBtn');
 const enBox = document.getElementById('enBox');
-const descripcionEn = document.getElementById('descripcionEn');
+const descripcionEnEl = document.getElementById('descripcionEn');
 const submitBtn = document.getElementById('submitBtn');
 
 photoBox.addEventListener('click', () => photoInput.click());
@@ -332,79 +595,85 @@ function hideStatus() {
   statusMsg.className = 'status-msg';
 }
 
-// Traducción gratuita vía MyMemory (sin API key, límite ~5000 palabras/día por IP)
+// ---------- Translation (free, MyMemory API, no key needed) ----------
 translateBtn.addEventListener('click', async () => {
-  const text = document.getElementById('descripcion').value.trim();
+  const text = descripcionEl.value.trim();
   if (!text) {
-    showStatus('Escribe primero la descripción.', 'err');
+    showStatus('Write the damage description first.', 'err');
     return;
   }
-  translateBtn.textContent = 'Traduciendo…';
+  translateBtn.textContent = 'Translating…';
   translateBtn.disabled = true;
   try {
     const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=es|en';
     const res = await fetch(url);
     const data = await res.json();
     const translated = data && data.responseData ? data.responseData.translatedText : '';
-    descripcionEn.value = translated || '';
+    descripcionEnEl.value = translated || '';
     enBox.classList.add('show');
     hideStatus();
   } catch (err) {
-    showStatus('No se pudo traducir (revisa la conexión). Puedes escribirla a mano abajo.', 'err');
+    showStatus('Could not translate (check your connection). You can type the English text manually below.', 'err');
     enBox.classList.add('show');
   } finally {
-    translateBtn.textContent = 'Traducir a inglés';
+    translateBtn.textContent = 'Translate to English';
     translateBtn.disabled = false;
   }
 });
 
+// ---------- Submit ----------
 submitBtn.addEventListener('click', async () => {
-  const ata = document.getElementById('ata').value.trim();
+  const ataVal = document.getElementById('ata').value;
+  const ataLabel = ataChapters.find(a => a.code === ataVal);
   const area = document.getElementById('area').value;
   const subarea = document.getElementById('subarea').value.trim();
-  const descripcion = document.getElementById('descripcion').value.trim();
-  const responsable = document.getElementById('responsable').value.trim();
+  const descripcion = descripcionEl.value.trim();
+  const responsableSel = document.getElementById('responsable').value;
+  const responsable = responsableSel === GUEST_OPTION
+    ? document.getElementById('responsableGuest').value.trim()
+    : responsableSel;
 
-  if (!photoBase64) { showStatus('Falta la foto.', 'err'); return; }
-  if (!ata || !area || !descripcion || !responsable) {
-    showStatus('Rellena ATA, área, descripción y responsable.', 'err');
+  if (!photoBase64) { showStatus('Photo is missing.', 'err'); return; }
+  if (!ataVal || !area || !descripcion || !responsable) {
+    showStatus('Fill in ATA, area, description and assigned to.', 'err');
     return;
   }
-  if (APPS_SCRIPT_URL.indexOf('PEGA_AQUI') === 0 || APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
-    showStatus('Falta configurar la URL de Apps Script en el código (ver guía).', 'err');
+  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
+    showStatus('The Apps Script URL is not configured yet (see setup guide).', 'err');
     return;
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando…';
-  showStatus('Guardando en Google Drive…', 'info');
+  submitBtn.textContent = 'Saving…';
+  showStatus('Saving to Google Drive…', 'info');
 
   try {
     const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'submitItem',
-        ata, area, subarea,
+        ata: ataLabel ? ataLabel.code : ataVal,
+        area, subarea,
         descripcion,
-        descripcionEn: descripcionEn.value.trim(),
+        descripcionEn: descripcionEnEl.value.trim(),
         responsable,
         photoBase64
       })
     });
     const data = await res.json();
     if (data.ok) {
-      showStatus('Guardado como ' + data.itemNumber + '. Carpeta creada en Drive.', 'ok');
+      showStatus('Saved as ' + data.itemNumber + '. Folder created in Drive.', 'ok');
       resetForm();
       fetchNextItemPreview();
     } else {
-      showStatus('Error: ' + (data.error || 'desconocido'), 'err');
+      showStatus('Error: ' + (data.error || 'unknown'), 'err');
     }
   } catch (err) {
-    showStatus('No se pudo conectar con el servidor. Revisa tu conexión y vuelve a intentarlo — tus datos no se han perdido, pulsa "Guardar item" otra vez.', 'err');
+    showStatus('Could not reach the server. Check your connection and press "Save item" again — nothing has been lost.', 'err');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Guardar item';
+    submitBtn.textContent = 'Save item';
   }
 });
 
@@ -416,19 +685,20 @@ function resetForm() {
   document.getElementById('ata').value = '';
   document.getElementById('area').value = '';
   document.getElementById('subarea').value = '';
-  document.getElementById('descripcion').value = '';
+  descripcionEl.value = '';
   document.getElementById('responsable').value = '';
-  descripcionEn.value = '';
+  document.getElementById('responsableGuest').value = '';
+  document.getElementById('responsableGuest').style.display = 'none';
+  descripcionEnEl.value = '';
   enBox.classList.remove('show');
+  ataSuggestionEl.classList.remove('show');
 }
 
-// Nota: el número real de item lo asigna el servidor de forma atómica
-// (por si varios usuarios guardan a la vez). Esta es solo una previsualización.
 async function fetchNextItemPreview() {
   const label = document.getElementById('nextItemLabel');
   const willBe = document.getElementById('willBeLabel');
   if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
-    label.textContent = 'sin configurar';
+    label.textContent = 'not set up';
     return;
   }
   try {
@@ -437,15 +707,97 @@ async function fetchNextItemPreview() {
     if (data.ok) {
       const n = data.items.length;
       const code = 'item ' + String(n).padStart(3, '0');
-      label.textContent = 'siguiente: ' + code;
+      label.textContent = 'next: ' + code;
       willBe.textContent = code;
     }
   } catch (err) {
-    label.textContent = 'sin conexión';
+    label.textContent = 'offline';
   }
 }
-
 fetchNextItemPreview();
+
+// ---------- Edit lists panel ----------
+const editOverlay = document.getElementById('editOverlay');
+let draftAreas, draftAta, draftResp;
+
+document.getElementById('openEditBtn').addEventListener('click', () => {
+  draftAreas = areas.slice();
+  draftAta = ataChapters.map(a => ({ ...a }));
+  draftResp = responsables.slice();
+  renderEditPanel();
+  editOverlay.classList.add('show');
+});
+document.getElementById('cancelEditBtn').addEventListener('click', () => {
+  editOverlay.classList.remove('show');
+});
+editOverlay.addEventListener('click', (e) => {
+  if (e.target === editOverlay) editOverlay.classList.remove('show');
+});
+
+function renderEditPanel() {
+  const areaRows = document.getElementById('areaEditRows');
+  areaRows.innerHTML = draftAreas.map((val, i) => `
+    <div class="edit-row">
+      <input type="text" data-idx="${i}" class="area-input" value="${escapeHtml(val)}">
+      <button class="remove-btn" data-idx="${i}" data-list="area">×</button>
+    </div>`).join('');
+
+  const ataRows = document.getElementById('ataEditRows');
+  ataRows.innerHTML = draftAta.map((entry, i) => `
+    <div class="edit-row">
+      <input type="text" class="code-input ata-code" data-idx="${i}" value="${escapeHtml(entry.code)}" placeholder="Code">
+      <input type="text" class="ata-label" data-idx="${i}" value="${escapeHtml(entry.label)}" placeholder="Label">
+      <button class="remove-btn" data-idx="${i}" data-list="ata">×</button>
+    </div>`).join('');
+
+  const respRows = document.getElementById('respEditRows');
+  respRows.innerHTML = draftResp.map((val, i) => `
+    <div class="edit-row">
+      <input type="text" data-idx="${i}" class="resp-input" value="${escapeHtml(val)}">
+      <button class="remove-btn" data-idx="${i}" data-list="resp">×</button>
+    </div>`).join('');
+
+  document.querySelectorAll('.area-input').forEach(el => el.addEventListener('input', e => draftAreas[e.target.dataset.idx] = e.target.value));
+  document.querySelectorAll('.ata-code').forEach(el => el.addEventListener('input', e => draftAta[e.target.dataset.idx].code = e.target.value));
+  document.querySelectorAll('.ata-label').forEach(el => el.addEventListener('input', e => draftAta[e.target.dataset.idx].label = e.target.value));
+  document.querySelectorAll('.resp-input').forEach(el => el.addEventListener('input', e => draftResp[e.target.dataset.idx] = e.target.value));
+
+  document.querySelectorAll('.remove-btn').forEach(btn => btn.addEventListener('click', (e) => {
+    const idx = e.target.dataset.idx;
+    const list = e.target.dataset.list;
+    if (list === 'area') draftAreas.splice(idx, 1);
+    if (list === 'ata') draftAta.splice(idx, 1);
+    if (list === 'resp') draftResp.splice(idx, 1);
+    renderEditPanel();
+  }));
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('addAreaBtn').addEventListener('click', () => { draftAreas.push(''); renderEditPanel(); });
+document.getElementById('addAtaBtn').addEventListener('click', () => { draftAta.push({ code: '', label: '' }); renderEditPanel(); });
+document.getElementById('addRespBtn').addEventListener('click', () => { draftResp.push(''); renderEditPanel(); });
+
+document.getElementById('resetListsBtn').addEventListener('click', () => {
+  draftAreas = DEFAULT_AREAS.slice();
+  draftAta = DEFAULT_ATA.map(a => ({ ...a }));
+  draftResp = DEFAULT_RESPONSABLES.slice();
+  renderEditPanel();
+});
+
+document.getElementById('saveListsBtn').addEventListener('click', () => {
+  areas = draftAreas.filter(v => v.trim() !== '');
+  ataChapters = draftAta.filter(a => a.code.trim() !== '' && a.label.trim() !== '');
+  responsables = draftResp.filter(v => v.trim() !== '');
+  saveLists();
+  renderAreaSelect();
+  renderAtaSelect();
+  renderResponsableSelect();
+  editOverlay.classList.remove('show');
+  showStatus('Lists updated.', 'ok');
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
