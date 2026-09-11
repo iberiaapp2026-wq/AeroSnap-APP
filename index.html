@@ -421,6 +421,7 @@
       </select>
     </div>
     <button class="btn btn-primary" id="continueExistingBtn" style="width:100%;">Continue</button>
+    <button class="btn btn-ghost" id="deleteAircraftBtn" style="width:100%; margin-top:8px; color:var(--red); border-color:var(--red);">Delete this aircraft…</button>
     <div class="project-status" id="existingStatus"></div>
   </div>
 
@@ -447,6 +448,7 @@
   </div>
   <div class="right-col">
     <span class="next-item" id="nextItemLabel">preparing…</span>
+    <span class="next-item" id="pendingBadge" style="color:var(--muted); display:none;"></span>
     <button class="change-aircraft" id="changeAircraftBtn">Change aircraft</button>
   </div>
 </header>
@@ -488,7 +490,7 @@
 
     <div class="field">
       <label class="field-label" for="subarea">Subarea</label>
-      <input type="text" id="subarea" placeholder="e.g. technical side">
+      <select id="subarea"></select>
     </div>
 
     <div class="field">
@@ -515,13 +517,30 @@
 
   <div class="section">
     <button class="btn btn-primary" id="submitBtn">Save item</button>
-    <div class="config-note">Will be saved as <span id="willBeLabel" class="item-code">item 000</span></div>
+    <div class="config-note">Will be saved as <span id="willBeLabel" class="item-code">ITEM000</span></div>
   </div>
 
   <div class="footer-space"></div>
 </main>
 
 </div><!-- /#appScreen -->
+
+<!-- Delete aircraft confirmation -->
+<div class="overlay" id="deleteOverlay">
+  <div class="edit-sheet">
+    <h2 style="color:var(--red);">Delete aircraft</h2>
+    <div class="sub" id="deleteWarningText"></div>
+    <div class="field">
+      <label class="field-label" for="deleteConfirmInput">Type the registration to confirm</label>
+      <input type="text" id="deleteConfirmInput" placeholder="">
+    </div>
+    <div class="project-status" id="deleteStatus"></div>
+    <div class="edit-sheet-actions">
+      <button class="btn btn-ghost" id="cancelDeleteBtn">Cancel</button>
+      <button class="btn btn-primary" id="confirmDeleteBtn" style="background:var(--red); color:#fff;">Delete permanently</button>
+    </div>
+  </div>
+</div>
 
 <!-- Edit lists panel -->
 <div class="overlay" id="editOverlay">
@@ -533,6 +552,12 @@
       <h3>Area</h3>
       <div id="areaEditRows"></div>
       <button class="add-row-btn" id="addAreaBtn">+ Add area</button>
+    </div>
+
+    <div class="edit-group">
+      <h3>Subarea</h3>
+      <div id="subareaEditRows"></div>
+      <button class="add-row-btn" id="addSubareaBtn">+ Add subarea</button>
     </div>
 
     <div class="edit-group">
@@ -560,7 +585,113 @@
 // ============================================================
 // CONFIG — paste your Apps Script URL here
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKUvUKmuA8cs8PyZrzHg_eTkrFblU0TwWkCqhCp-ACYBfd7hdg1-LsdCCKAWGHLGVnvg/exec';
+const APPS_SCRIPT_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
+
+// ---------- Offline queue (IndexedDB) ----------
+// If there is no connection when saving an item, it is stored on the
+// device and uploaded automatically as soon as the connection comes back.
+const DB_NAME = 'inspeccionQueueDB';
+const STORE_NAME = 'pending';
+let dbPromise = null;
+
+function openQueueDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+async function queueAdd(payload) {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).add({ payload, createdAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function queueGetAll() {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function queueDelete(id) {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function postToServer(payload) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+let syncing = false;
+async function trySyncQueue() {
+  if (syncing) return;
+  syncing = true;
+  try {
+    const items = await queueGetAll();
+    for (const item of items) {
+      try {
+        const data = await postToServer(item.payload);
+        if (data.ok) {
+          await queueDelete(item.id);
+          if (currentMatricula && item.payload.matricula === currentMatricula) {
+            fetchNextItemPreview();
+          }
+        } else {
+          // Server-side error (not a connection problem): stop retrying this item automatically.
+          break;
+        }
+      } catch (err) {
+        // Still offline: stop and try again later.
+        break;
+      }
+    }
+  } finally {
+    syncing = false;
+    await refreshPendingBadge();
+  }
+}
+
+async function refreshPendingBadge() {
+  const badge = document.getElementById('pendingBadge');
+  try {
+    const items = await queueGetAll();
+    if (items.length > 0) {
+      badge.textContent = items.length + ' pending upload';
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (err) { /* ignore */ }
+}
+
+window.addEventListener('online', trySyncQueue);
+window.addEventListener('load', () => { trySyncQueue(); });
+setInterval(() => { if (navigator.onLine) trySyncQueue(); }, 20000);
+refreshPendingBadge();
 
 // ---------- Aircraft / project state ----------
 let currentMatricula = null;
@@ -643,6 +774,62 @@ document.getElementById('changeAircraftBtn').addEventListener('click', () => {
   loadAircraftList();
 });
 
+// ---------- Delete aircraft ----------
+const deleteOverlay = document.getElementById('deleteOverlay');
+const deleteConfirmInput = document.getElementById('deleteConfirmInput');
+const deleteStatus = document.getElementById('deleteStatus');
+const deleteWarningText = document.getElementById('deleteWarningText');
+let matriculaToDelete = null;
+
+document.getElementById('deleteAircraftBtn').addEventListener('click', () => {
+  const matricula = existingSelect.value;
+  if (!matricula) { existingStatus.textContent = 'Select an aircraft first.'; existingStatus.className = 'project-status err'; return; }
+  matriculaToDelete = matricula;
+  deleteWarningText.textContent = `This will permanently delete "${matricula}" from Drive: its folder, all item photos and the Excel register. This cannot be undone.`;
+  deleteConfirmInput.value = '';
+  deleteConfirmInput.placeholder = matricula;
+  deleteStatus.textContent = '';
+  deleteStatus.className = 'project-status';
+  deleteOverlay.classList.add('show');
+});
+
+document.getElementById('cancelDeleteBtn').addEventListener('click', () => {
+  deleteOverlay.classList.remove('show');
+});
+deleteOverlay.addEventListener('click', (e) => {
+  if (e.target === deleteOverlay) deleteOverlay.classList.remove('show');
+});
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  if (deleteConfirmInput.value.trim().toUpperCase() !== matriculaToDelete.toUpperCase()) {
+    deleteStatus.textContent = 'Type the exact registration to confirm.';
+    deleteStatus.className = 'project-status err';
+    return;
+  }
+  deleteStatus.textContent = 'Deleting…';
+  deleteStatus.className = 'project-status';
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteAircraft', matricula: matriculaToDelete })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      deleteOverlay.classList.remove('show');
+      existingStatus.textContent = matriculaToDelete + ' deleted.';
+      existingStatus.className = 'project-status ok';
+      loadAircraftList();
+    } else {
+      deleteStatus.textContent = 'Error: ' + (data.error || 'unknown');
+      deleteStatus.className = 'project-status err';
+    }
+  } catch (err) {
+    deleteStatus.textContent = 'Could not connect. Check your connection and try again.';
+    deleteStatus.className = 'project-status err';
+  }
+});
+
 // ---------- Default lists ----------
 const DEFAULT_AREAS = ['Fuselage', 'Cabin', 'Landing gear', 'Wings', 'Empennage', 'Engines', 'Cargo compartment', 'Other'];
 
@@ -657,6 +844,8 @@ const DEFAULT_ATA = [
   { code: '57', label: '57 - Wings' },
   { code: '71', label: '71 - Engines' }
 ];
+
+const DEFAULT_SUBAREAS = ['LH', 'RH', 'FWD', 'AFT'];
 
 const DEFAULT_RESPONSABLES = [
   'Álvaro', 'Javier M.', 'Claudia', 'Salvador', 'Alejandra', 'Israel',
@@ -679,6 +868,7 @@ const ATA_KEYWORDS = [
 
 // ---------- State (loaded lists, possibly customised) ----------
 let areas = [];
+let subareas = [];
 let ataChapters = [];
 let responsables = [];
 
@@ -687,18 +877,20 @@ function loadLists() {
     const saved = JSON.parse(localStorage.getItem('inspeccionLists') || 'null');
     if (saved && saved.areas && saved.ata && saved.responsables) {
       areas = saved.areas;
+      subareas = saved.subareas && saved.subareas.length ? saved.subareas : DEFAULT_SUBAREAS.slice();
       ataChapters = saved.ata;
       responsables = saved.responsables;
       return;
     }
   } catch (e) {}
   areas = DEFAULT_AREAS.slice();
+  subareas = DEFAULT_SUBAREAS.slice();
   ataChapters = DEFAULT_ATA.map(a => ({ ...a }));
   responsables = DEFAULT_RESPONSABLES.slice();
 }
 
 function saveLists() {
-  localStorage.setItem('inspeccionLists', JSON.stringify({ areas, ata: ataChapters, responsables }));
+  localStorage.setItem('inspeccionLists', JSON.stringify({ areas, subareas, ata: ataChapters, responsables }));
 }
 
 loadLists();
@@ -707,6 +899,10 @@ loadLists();
 function renderAreaSelect() {
   const sel = document.getElementById('area');
   sel.innerHTML = '<option value="">Select…</option>' + areas.map(a => `<option value="${a}">${a}</option>`).join('');
+}
+function renderSubareaSelect() {
+  const sel = document.getElementById('subarea');
+  sel.innerHTML = '<option value="">Select…</option>' + subareas.map(a => `<option value="${a}">${a}</option>`).join('');
 }
 function renderAtaSelect() {
   const sel = document.getElementById('ata');
@@ -724,6 +920,7 @@ document.getElementById('responsable').addEventListener('change', (e) => {
 });
 
 renderAreaSelect();
+renderSubareaSelect();
 renderAtaSelect();
 renderResponsableSelect();
 
@@ -829,7 +1026,7 @@ submitBtn.addEventListener('click', async () => {
   const ataVal = document.getElementById('ata').value;
   const ataLabel = ataChapters.find(a => a.code === ataVal);
   const area = document.getElementById('area').value;
-  const subarea = document.getElementById('subarea').value.trim();
+  const subarea = document.getElementById('subarea').value;
   const descripcion = descripcionEl.value.trim();
   const responsableSel = document.getElementById('responsable').value;
   const responsable = responsableSel === GUEST_OPTION
@@ -847,35 +1044,48 @@ submitBtn.addEventListener('click', async () => {
     return;
   }
 
+  const payload = {
+    action: 'submitItem',
+    matricula: currentMatricula,
+    ata: ataLabel ? ataLabel.code : ataVal,
+    area, subarea,
+    descripcion,
+    descripcionEn: descripcionEnEl.value.trim(),
+    responsable,
+    photoBase64
+  };
+
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving…';
-  showStatus('Saving to Google Drive…', 'info');
 
+  // No connection at all: skip straight to the offline queue.
+  if (!navigator.onLine) {
+    await queueAdd(payload);
+    showStatus('No connection. Saved on this device — it will upload automatically once you are back online.', 'info');
+    resetForm();
+    refreshPendingBadge();
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Save item';
+    return;
+  }
+
+  showStatus('Saving to Google Drive…', 'info');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'submitItem',
-        matricula: currentMatricula,
-        ata: ataLabel ? ataLabel.code : ataVal,
-        area, subarea,
-        descripcion,
-        descripcionEn: descripcionEnEl.value.trim(),
-        responsable,
-        photoBase64
-      })
-    });
-    const data = await res.json();
+    const data = await postToServer(payload);
     if (data.ok) {
       showStatus('Saved as ' + data.itemNumber + '. Folder created in Drive.', 'ok');
       resetForm();
       fetchNextItemPreview();
+      trySyncQueue();
     } else {
       showStatus('Error: ' + (data.error || 'unknown'), 'err');
     }
   } catch (err) {
-    showStatus('Could not reach the server. Check your connection and press "Save item" again — nothing has been lost.', 'err');
+    // Connection dropped mid-request: don't lose the item, queue it instead.
+    await queueAdd(payload);
+    showStatus('Connection lost. Saved on this device — it will upload automatically once you are back online.', 'info');
+    resetForm();
+    refreshPendingBadge();
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Save item';
@@ -908,7 +1118,7 @@ async function fetchNextItemPreview() {
     const data = await res.json();
     if (data.ok) {
       const n = data.items.length;
-      const code = 'item ' + String(n).padStart(3, '0');
+      const code = 'ITEM' + String(n).padStart(3, '0');
       label.textContent = 'next: ' + code;
       willBe.textContent = code;
     }
@@ -919,10 +1129,11 @@ async function fetchNextItemPreview() {
 
 // ---------- Edit lists panel ----------
 const editOverlay = document.getElementById('editOverlay');
-let draftAreas, draftAta, draftResp;
+let draftAreas, draftSubareas, draftAta, draftResp;
 
 document.getElementById('openEditBtn').addEventListener('click', () => {
   draftAreas = areas.slice();
+  draftSubareas = subareas.slice();
   draftAta = ataChapters.map(a => ({ ...a }));
   draftResp = responsables.slice();
   renderEditPanel();
@@ -943,6 +1154,13 @@ function renderEditPanel() {
       <button class="remove-btn" data-idx="${i}" data-list="area">×</button>
     </div>`).join('');
 
+  const subareaRows = document.getElementById('subareaEditRows');
+  subareaRows.innerHTML = draftSubareas.map((val, i) => `
+    <div class="edit-row">
+      <input type="text" data-idx="${i}" class="subarea-input" value="${escapeHtml(val)}">
+      <button class="remove-btn" data-idx="${i}" data-list="subarea">×</button>
+    </div>`).join('');
+
   const ataRows = document.getElementById('ataEditRows');
   ataRows.innerHTML = draftAta.map((entry, i) => `
     <div class="edit-row">
@@ -959,6 +1177,7 @@ function renderEditPanel() {
     </div>`).join('');
 
   document.querySelectorAll('.area-input').forEach(el => el.addEventListener('input', e => draftAreas[e.target.dataset.idx] = e.target.value));
+  document.querySelectorAll('.subarea-input').forEach(el => el.addEventListener('input', e => draftSubareas[e.target.dataset.idx] = e.target.value));
   document.querySelectorAll('.ata-code').forEach(el => el.addEventListener('input', e => draftAta[e.target.dataset.idx].code = e.target.value));
   document.querySelectorAll('.ata-label').forEach(el => el.addEventListener('input', e => draftAta[e.target.dataset.idx].label = e.target.value));
   document.querySelectorAll('.resp-input').forEach(el => el.addEventListener('input', e => draftResp[e.target.dataset.idx] = e.target.value));
@@ -967,6 +1186,7 @@ function renderEditPanel() {
     const idx = e.target.dataset.idx;
     const list = e.target.dataset.list;
     if (list === 'area') draftAreas.splice(idx, 1);
+    if (list === 'subarea') draftSubareas.splice(idx, 1);
     if (list === 'ata') draftAta.splice(idx, 1);
     if (list === 'resp') draftResp.splice(idx, 1);
     renderEditPanel();
@@ -978,11 +1198,13 @@ function escapeHtml(s) {
 }
 
 document.getElementById('addAreaBtn').addEventListener('click', () => { draftAreas.push(''); renderEditPanel(); });
+document.getElementById('addSubareaBtn').addEventListener('click', () => { draftSubareas.push(''); renderEditPanel(); });
 document.getElementById('addAtaBtn').addEventListener('click', () => { draftAta.push({ code: '', label: '' }); renderEditPanel(); });
 document.getElementById('addRespBtn').addEventListener('click', () => { draftResp.push(''); renderEditPanel(); });
 
 document.getElementById('resetListsBtn').addEventListener('click', () => {
   draftAreas = DEFAULT_AREAS.slice();
+  draftSubareas = DEFAULT_SUBAREAS.slice();
   draftAta = DEFAULT_ATA.map(a => ({ ...a }));
   draftResp = DEFAULT_RESPONSABLES.slice();
   renderEditPanel();
@@ -990,10 +1212,12 @@ document.getElementById('resetListsBtn').addEventListener('click', () => {
 
 document.getElementById('saveListsBtn').addEventListener('click', () => {
   areas = draftAreas.filter(v => v.trim() !== '');
+  subareas = draftSubareas.filter(v => v.trim() !== '');
   ataChapters = draftAta.filter(a => a.code.trim() !== '' && a.label.trim() !== '');
   responsables = draftResp.filter(v => v.trim() !== '');
   saveLists();
   renderAreaSelect();
+  renderSubareaSelect();
   renderAtaSelect();
   renderResponsableSelect();
   editOverlay.classList.remove('show');
