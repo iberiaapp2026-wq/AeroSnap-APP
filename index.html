@@ -190,6 +190,55 @@
     display:block;
     margin-bottom:8px;
   }
+  .photo-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:8px;
+  }
+  .photo-thumb{
+    position:relative;
+    aspect-ratio:1;
+    border-radius:6px;
+    overflow:hidden;
+    background:var(--surface);
+  }
+  .photo-thumb img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .photo-thumb .remove-photo{
+    position:absolute;
+    top:4px;
+    right:4px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:rgba(0,0,0,0.65);
+    color:#fff;
+    border:none;
+    font-size:14px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .photo-add-tile{
+    aspect-ratio:1;
+    border:1px dashed var(--rule);
+    border-radius:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    color:var(--muted);
+    font-size:12px;
+    cursor:pointer;
+    gap:4px;
+  }
+  .photo-add-tile .icon{font-size:22px;}
   input[type=file]{display:none;}
   label.field-label{
     display:block;
@@ -458,13 +507,12 @@
   <div id="statusMsg" class="status-msg"></div>
 
   <div class="section">
-    <div class="section-label">PHOTOGRAPH</div>
-    <div class="photo-box" id="photoBox">
-      <div class="placeholder" id="photoPlaceholder">
+    <div class="section-label">PHOTOGRAPHS</div>
+    <div class="photo-grid" id="photoGrid">
+      <div class="photo-add-tile" id="photoAddTile">
         <span class="icon">📷</span>
-        Tap to take photo
+        Add photo
       </div>
-      <img id="photoPreview" style="display:none;">
     </div>
     <input type="file" id="photoInput" accept="image/*" capture="environment">
   </div>
@@ -499,7 +547,7 @@
     </div>
 
     <div class="field">
-      <label class="field-label" for="responsable">Assigned to</label>
+      <label class="field-label" for="responsable">Inspector</label>
       <select id="responsable"></select>
       <input type="text" id="responsableGuest" placeholder="Enter name" style="display:none; margin-top:8px;">
     </div>
@@ -567,7 +615,7 @@
     </div>
 
     <div class="edit-group">
-      <h3>Assigned to</h3>
+      <h3>Inspector</h3>
       <div id="respEditRows"></div>
       <button class="add-row-btn" id="addRespBtn">+ Add person</button>
       <div class="locked-note">"Guest user" is always kept as the last option.</div>
@@ -585,7 +633,7 @@
 // ============================================================
 // CONFIG — paste your Apps Script URL here
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx6cqKvO8Mw4xSsVWtyXiKWMQoVQzUwOjw4T-7uVrJPXzuKJdn3sOVFDM7ZbazglyiY4Q/exec';
+const APPS_SCRIPT_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
 
 // ---------- Offline queue (IndexedDB) ----------
 // If there is no connection when saving an item, it is stored on the
@@ -959,32 +1007,47 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-// ---------- Photo capture ----------
-let photoBase64 = null;
+// ---------- Photo capture (multiple photos per item) ----------
+let photos = [];
 
-const photoBox = document.getElementById('photoBox');
+const photoGrid = document.getElementById('photoGrid');
+const photoAddTile = document.getElementById('photoAddTile');
 const photoInput = document.getElementById('photoInput');
-const photoPreview = document.getElementById('photoPreview');
-const photoPlaceholder = document.getElementById('photoPlaceholder');
 const statusMsg = document.getElementById('statusMsg');
 const translateBtn = document.getElementById('translateBtn');
 const enBox = document.getElementById('enBox');
 const descripcionEnEl = document.getElementById('descripcionEn');
 const submitBtn = document.getElementById('submitBtn');
 
-photoBox.addEventListener('click', () => photoInput.click());
+function renderPhotoGrid() {
+  const thumbs = photos.map((src, i) => `
+    <div class="photo-thumb">
+      <img src="${src}">
+      <button type="button" class="remove-photo" data-idx="${i}">×</button>
+    </div>`).join('');
+  photoGrid.innerHTML = thumbs + `
+    <div class="photo-add-tile" id="photoAddTile">
+      <span class="icon">📷</span>
+      Add photo
+    </div>`;
+  document.getElementById('photoAddTile').addEventListener('click', () => photoInput.click());
+  photoGrid.querySelectorAll('.remove-photo').forEach(btn => btn.addEventListener('click', (e) => {
+    photos.splice(Number(e.currentTarget.dataset.idx), 1);
+    renderPhotoGrid();
+  }));
+}
+renderPhotoGrid();
 
 photoInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (ev) => {
-    photoBase64 = ev.target.result;
-    photoPreview.src = photoBase64;
-    photoPreview.style.display = 'block';
-    photoPlaceholder.style.display = 'none';
+    photos.push(ev.target.result);
+    renderPhotoGrid();
   };
   reader.readAsDataURL(file);
+  photoInput.value = '';
 });
 
 function showStatus(text, type) {
@@ -1034,9 +1097,9 @@ submitBtn.addEventListener('click', async () => {
     : responsableSel;
 
   if (!currentMatricula) { showStatus('No aircraft selected.', 'err'); return; }
-  if (!photoBase64) { showStatus('Photo is missing.', 'err'); return; }
+  if (!photos.length) { showStatus('At least one photo is required.', 'err'); return; }
   if (!ataVal || !area || !descripcion || !responsable) {
-    showStatus('Fill in ATA, area, description and assigned to.', 'err');
+    showStatus('Fill in ATA, area, description and inspector.', 'err');
     return;
   }
   if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
@@ -1052,7 +1115,7 @@ submitBtn.addEventListener('click', async () => {
     descripcion,
     descripcionEn: descripcionEnEl.value.trim(),
     responsable,
-    photoBase64
+    photos
   };
 
   submitBtn.disabled = true;
@@ -1093,10 +1156,8 @@ submitBtn.addEventListener('click', async () => {
 });
 
 function resetForm() {
-  photoBase64 = null;
-  photoPreview.style.display = 'none';
-  photoPlaceholder.style.display = 'block';
-  photoInput.value = '';
+  photos = [];
+  renderPhotoGrid();
   document.getElementById('ata').value = '';
   document.getElementById('area').value = '';
   document.getElementById('subarea').value = '';
