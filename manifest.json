@@ -1,6 +1,6 @@
 {
-  "name": "Inspección de Aeronave",
-  "short_name": "Inspección",
+  "name": "Aircraft Inspection",
+  "short_name": "Inspection",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1B2129",
