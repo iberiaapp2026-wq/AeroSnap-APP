@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#1B2129">
 <title>Aircraft Inspection</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="app-icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="app-icon-192.png">
 <style>
   :root{
     --bg:#1B2129;
@@ -32,25 +32,106 @@
     padding-bottom:48px;
   }
   header{
-    padding:20px 20px 16px;
+    padding:16px 20px;
     border-bottom:1px solid var(--rule);
     display:flex;
-    align-items:baseline;
+    align-items:center;
     justify-content:space-between;
     gap:10px;
   }
+  header .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  header .brand img{
+    height:26px;
+    width:auto;
+    display:block;
+    border-radius:4px;
+  }
   header h1{
-    font-size:17px;
+    font-size:15px;
     font-weight:600;
     margin:0;
     letter-spacing:0.2px;
+  }
+  header .aircraft-tag{
+    font-size:11px;
+    color:var(--muted);
+  }
+  header .right-col{
+    text-align:right;
   }
   header .next-item{
     font-family:var(--mono);
     font-size:13px;
     color:var(--amber);
     white-space:nowrap;
+    display:block;
   }
+  header .change-aircraft{
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:11px;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:2px 0 0;
+  }
+
+  /* Project / aircraft selection screen */
+  #projectScreen{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px 24px;
+    text-align:center;
+  }
+  #projectScreen img.logo{
+    height:44px;
+    margin-bottom:28px;
+    border-radius:6px;
+  }
+  #projectScreen h2{
+    font-size:18px;
+    font-weight:600;
+    margin:0 0 6px;
+  }
+  #projectScreen .sub{
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:28px;
+  }
+  .project-card{
+    width:100%;
+    max-width:360px;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:14px;
+    text-align:left;
+  }
+  .project-card h3{
+    font-size:14px;
+    margin:0 0 12px;
+  }
+  .project-card .field{
+    margin-bottom:12px;
+  }
+  .project-status{
+    font-size:12px;
+    min-height:16px;
+    margin-top:4px;
+    color:var(--muted);
+  }
+  .project-status.err{color:var(--red);}
+  .project-status.ok{color:var(--green);}
+  #appScreen{display:none;}
+  #appScreen.show{display:block;}
   main{
     max-width:520px;
     margin:0 auto;
@@ -326,9 +407,48 @@
 </head>
 <body>
 
+<!-- Aircraft / project selection screen -->
+<div id="projectScreen">
+  <img src="app-icon-192.png" class="logo" alt="Iberia">
+  <h2>Aircraft Inspection</h2>
+  <div class="sub">Select an aircraft to start or continue an inspection.</div>
+
+  <div class="project-card">
+    <h3>Existing aircraft</h3>
+    <div class="field">
+      <select id="existingAircraftSelect">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="continueExistingBtn" style="width:100%;">Continue</button>
+    <div class="project-status" id="existingStatus"></div>
+  </div>
+
+  <div class="project-card">
+    <h3>New aircraft</h3>
+    <div class="field">
+      <input type="text" id="newMatriculaInput" placeholder="Registration, e.g. EC-ABC">
+    </div>
+    <button class="btn btn-ghost" id="startNewBtn" style="width:100%;">Create and start</button>
+    <div class="project-status" id="newStatus"></div>
+  </div>
+</div>
+
+<!-- Main inspection app -->
+<div id="appScreen">
+
 <header>
-  <h1>Aircraft Inspection</h1>
-  <span class="next-item" id="nextItemLabel">preparing…</span>
+  <div class="brand">
+    <img src="app-icon-192.png" alt="Iberia">
+    <div>
+      <h1>Aircraft Inspection</h1>
+      <div class="aircraft-tag" id="aircraftTag">—</div>
+    </div>
+  </div>
+  <div class="right-col">
+    <span class="next-item" id="nextItemLabel">preparing…</span>
+    <button class="change-aircraft" id="changeAircraftBtn">Change aircraft</button>
+  </div>
 </header>
 
 <main>
@@ -401,6 +521,8 @@
   <div class="footer-space"></div>
 </main>
 
+</div><!-- /#appScreen -->
+
 <!-- Edit lists panel -->
 <div class="overlay" id="editOverlay">
   <div class="edit-sheet">
@@ -439,6 +561,87 @@
 // CONFIG — paste your Apps Script URL here
 // ============================================================
 const APPS_SCRIPT_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
+
+// ---------- Aircraft / project state ----------
+let currentMatricula = null;
+
+const projectScreen = document.getElementById('projectScreen');
+const appScreen = document.getElementById('appScreen');
+const existingSelect = document.getElementById('existingAircraftSelect');
+const existingStatus = document.getElementById('existingStatus');
+const newStatus = document.getElementById('newStatus');
+const newMatriculaInput = document.getElementById('newMatriculaInput');
+
+async function loadAircraftList() {
+  existingSelect.innerHTML = '<option value="">Loading…</option>';
+  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
+    existingSelect.innerHTML = '<option value="">Server not configured</option>';
+    return;
+  }
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=listAircraft');
+    const data = await res.json();
+    if (data.ok && data.aircraft.length) {
+      existingSelect.innerHTML = data.aircraft.map(m => `<option value="${m}">${m}</option>`).join('');
+    } else {
+      existingSelect.innerHTML = '<option value="">No aircraft yet</option>';
+    }
+  } catch (err) {
+    existingSelect.innerHTML = '<option value="">Could not load (check connection)</option>';
+  }
+}
+loadAircraftList();
+
+document.getElementById('continueExistingBtn').addEventListener('click', async () => {
+  const matricula = existingSelect.value;
+  if (!matricula) { existingStatus.textContent = 'Select an aircraft.'; existingStatus.className = 'project-status err'; return; }
+  await openAircraft(matricula, existingStatus);
+});
+
+document.getElementById('startNewBtn').addEventListener('click', async () => {
+  const matricula = newMatriculaInput.value.trim();
+  if (!matricula) { newStatus.textContent = 'Enter a registration.'; newStatus.className = 'project-status err'; return; }
+  await openAircraft(matricula, newStatus);
+});
+
+async function openAircraft(matricula, statusEl) {
+  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
+    statusEl.textContent = 'The Apps Script URL is not configured yet.';
+    statusEl.className = 'project-status err';
+    return;
+  }
+  statusEl.textContent = 'Connecting…';
+  statusEl.className = 'project-status';
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getOrCreateAircraft', matricula })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = 'Error: ' + (data.error || 'unknown');
+      statusEl.className = 'project-status err';
+      return;
+    }
+    currentMatricula = data.matricula;
+    document.getElementById('aircraftTag').textContent = currentMatricula;
+    document.getElementById('nextItemLabel').textContent = 'next: ' + data.nextItem;
+    document.getElementById('willBeLabel').textContent = data.nextItem;
+    projectScreen.style.display = 'none';
+    appScreen.classList.add('show');
+  } catch (err) {
+    statusEl.textContent = 'Could not connect. Check your connection and try again.';
+    statusEl.className = 'project-status err';
+  }
+}
+
+document.getElementById('changeAircraftBtn').addEventListener('click', () => {
+  appScreen.classList.remove('show');
+  projectScreen.style.display = 'flex';
+  currentMatricula = null;
+  loadAircraftList();
+});
 
 // ---------- Default lists ----------
 const DEFAULT_AREAS = ['Fuselage', 'Cabin', 'Landing gear', 'Wings', 'Empennage', 'Engines', 'Cargo compartment', 'Other'];
@@ -633,6 +836,7 @@ submitBtn.addEventListener('click', async () => {
     ? document.getElementById('responsableGuest').value.trim()
     : responsableSel;
 
+  if (!currentMatricula) { showStatus('No aircraft selected.', 'err'); return; }
   if (!photoBase64) { showStatus('Photo is missing.', 'err'); return; }
   if (!ataVal || !area || !descripcion || !responsable) {
     showStatus('Fill in ATA, area, description and assigned to.', 'err');
@@ -653,6 +857,7 @@ submitBtn.addEventListener('click', async () => {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'submitItem',
+        matricula: currentMatricula,
         ata: ataLabel ? ataLabel.code : ataVal,
         area, subarea,
         descripcion,
@@ -697,12 +902,9 @@ function resetForm() {
 async function fetchNextItemPreview() {
   const label = document.getElementById('nextItemLabel');
   const willBe = document.getElementById('willBeLabel');
-  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
-    label.textContent = 'not set up';
-    return;
-  }
+  if (!currentMatricula || APPS_SCRIPT_URL.includes('PEGA_AQUI')) return;
   try {
-    const res = await fetch(APPS_SCRIPT_URL + '?action=list');
+    const res = await fetch(APPS_SCRIPT_URL + '?action=list&matricula=' + encodeURIComponent(currentMatricula));
     const data = await res.json();
     if (data.ok) {
       const n = data.items.length;
@@ -714,7 +916,6 @@ async function fetchNextItemPreview() {
     label.textContent = 'offline';
   }
 }
-fetchNextItemPreview();
 
 // ---------- Edit lists panel ----------
 const editOverlay = document.getElementById('editOverlay');
