@@ -454,6 +454,7 @@
   <img src="app-icon-192.png" class="logo" alt="Iberia">
   <h2>Who is inspecting?</h2>
   <div class="sub" id="inspectorSubtitle">Select your name — you won't need to enter it again for this session.</div>
+  <button class="edit-link" id="openEditFromInspectorBtn" style="margin-bottom:14px;">Edit list</button>
 
   <div class="project-card" id="mainInspectorCard">
     <div class="field">
@@ -623,7 +624,7 @@
 // ============================================================
 // CONFIG — paste your Apps Script URL here
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydgDrzHWuW2GVhf_JVxfSiOHImyjcbiLvz9E-CKsiNtqqJISZoy1qNnOxcHxUKcAH0yw/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXr8HFClZsZFevI31fyBkHe0JJ5sRU3M2SvsImR7jFBYJ0f-cMx83oj0ssTV-VqHNvig/exec';
 const GUEST_OPTION = 'Guest user';
 
 // Small built-in fallback used only if the server has never been reached
@@ -633,10 +634,15 @@ const FALLBACK_CONFIG = {
   areas: ['Fuselage', 'Cabin', 'Landing gear', 'Wings', 'Other'],
   subareas: ['LH', 'RH', 'FWD', 'AFT'],
   ata: [
+    { code: '25', label: '25 - Equipment / Furnishings' },
+    { code: '27', label: '27 - Flight Controls' },
     { code: '32', label: '32 - Landing Gear' },
+    { code: '34', label: '34 - Navigation' },
+    { code: '49', label: '49 - Airborne Auxiliary Power' },
     { code: '53', label: '53 - Fuselage' },
+    { code: '55', label: '55 - Stabilizers' },
     { code: '57', label: '57 - Wings' },
-    { code: '71', label: '71 - Power Plant' }
+    { code: '72', label: '72 - Engine' }
   ],
   responsables: ['Álvaro', 'Javier M.', 'Claudia', 'Salvador', 'Alejandra', 'Israel', 'Joaquín', 'Sergio', 'Charlotte', 'Lorea', 'Laura', 'Pablo', 'Herminio', 'Rodrigo', 'Ángel', 'Santiago', 'Roberto', 'Javier G.'],
   rectifications: ['Cleaned', 'Repaired', 'Replaced', 'Deferred']
@@ -1285,7 +1291,7 @@ function resetForm() {
 const editOverlay = document.getElementById('editOverlay');
 let draftAreas, draftSubareas, draftAta, draftRectifications, draftResp;
 
-document.getElementById('openEditBtn').addEventListener('click', () => {
+function openEditListsPanel() {
   draftAreas = config.areas.slice();
   draftSubareas = config.subareas.slice();
   draftAta = config.ata.map(a => ({ ...a }));
@@ -1293,7 +1299,9 @@ document.getElementById('openEditBtn').addEventListener('click', () => {
   draftResp = config.responsables.slice();
   renderEditPanel();
   editOverlay.classList.add('show');
-});
+}
+document.getElementById('openEditBtn').addEventListener('click', openEditListsPanel);
+document.getElementById('openEditFromInspectorBtn').addEventListener('click', openEditListsPanel);
 document.getElementById('cancelEditBtn').addEventListener('click', () => {
   editOverlay.classList.remove('show');
 });
