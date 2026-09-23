@@ -455,13 +455,20 @@
   <h2>Who is inspecting?</h2>
   <div class="sub" id="inspectorSubtitle">Select your name — you won't need to enter it again for this session.</div>
 
-  <div class="project-card">
+  <div class="project-card" id="mainInspectorCard">
     <div class="field">
       <select id="inspectorSelect"></select>
       <input type="text" id="inspectorGuestInput" placeholder="Enter name" style="display:none; margin-top:8px;">
     </div>
     <button class="btn btn-primary" id="confirmInspectorBtn" style="width:100%;">Continue</button>
     <div class="project-status" id="inspectorStatus"></div>
+  </div>
+
+  <div class="project-card" id="guestConfirmCard" style="display:none;">
+    <h3>Add to inspector list?</h3>
+    <div class="sub" id="guestConfirmText" style="margin-bottom:14px;"></div>
+    <button class="btn btn-primary" id="guestAddYesBtn" style="width:100%; margin-bottom:8px;">Add permanently and continue</button>
+    <button class="btn btn-ghost" id="guestAddNoBtn" style="width:100%;">Just this once</button>
   </div>
 </div>
 
@@ -804,9 +811,13 @@ function openInspectorScreen() {
   inspectorStatus.className = 'project-status';
   inspectorGuestInput.value = '';
   inspectorGuestInput.style.display = 'none';
+  document.getElementById('guestConfirmCard').style.display = 'none';
+  document.getElementById('mainInspectorCard').style.display = 'block';
   renderInspectorSelects();
   inspectorScreen.style.display = 'flex';
 }
+
+let pendingGuestName = null;
 
 document.getElementById('confirmInspectorBtn').addEventListener('click', () => {
   const sel = inspectorSelect.value;
@@ -816,13 +827,51 @@ document.getElementById('confirmInspectorBtn').addEventListener('click', () => {
     inspectorStatus.className = 'project-status err';
     return;
   }
+  if (sel === GUEST_OPTION) {
+    pendingGuestName = name;
+    document.getElementById('guestConfirmText').textContent = `Add "${name}" to the inspector list for everyone?`;
+    document.getElementById('mainInspectorCard').style.display = 'none';
+    document.getElementById('guestConfirmCard').style.display = 'block';
+    return;
+  }
+  finalizeInspector(name);
+});
+
+document.getElementById('guestAddYesBtn').addEventListener('click', async () => {
+  await addInspectorPermanently(pendingGuestName);
+  finalizeInspector(pendingGuestName);
+});
+
+document.getElementById('guestAddNoBtn').addEventListener('click', () => {
+  finalizeInspector(pendingGuestName);
+});
+
+function finalizeInspector(name) {
   currentInspector = name;
-  if (sel !== GUEST_OPTION) localStorage.setItem('inspeccionLastInspector', name);
+  if (config.responsables.includes(name)) localStorage.setItem('inspeccionLastInspector', name);
   document.getElementById('inspectorTag').textContent = currentInspector;
   inspectorScreen.style.display = 'none';
   appScreen.classList.add('show');
   updateStatusLine();
-});
+}
+
+// Añade un nombre nuevo a la lista de inspectores, de forma definitiva
+// para todos los usuarios y todos los aviones (presentes y futuros).
+async function addInspectorPermanently(name) {
+  if (!config.responsables.includes(name)) {
+    config.responsables = config.responsables.concat([name]);
+    localStorage.setItem('inspeccionConfigCache', JSON.stringify(config));
+    renderAllSelects();
+  }
+  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'saveConfig', config })
+    });
+  } catch (err) { /* queda aplicado en este dispositivo aunque no se pudiera guardar para todos */ }
+}
 
 document.getElementById('changeInspectorBtn').addEventListener('click', () => {
   openInspectorScreen();
