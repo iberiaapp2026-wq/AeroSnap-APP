@@ -285,8 +285,8 @@
   }
   .footer-space{height:20px;}
 
-  /* Project / inspector selection screens */
-  #projectScreen, #inspectorScreen{
+  /* Project / inspector / mode selection screens */
+  #projectScreen, #inspectorScreen, #modeScreen{
     min-height:100vh;
     display:flex;
     flex-direction:column;
@@ -295,18 +295,18 @@
     padding:32px 24px;
     text-align:center;
   }
-  #inspectorScreen{display:none;}
-  #projectScreen img.logo, #inspectorScreen img.logo{
+  #inspectorScreen, #modeScreen{display:none;}
+  #projectScreen img.logo, #inspectorScreen img.logo, #modeScreen img.logo{
     height:44px;
     margin-bottom:28px;
     border-radius:6px;
   }
-  #projectScreen h2, #inspectorScreen h2{
+  #projectScreen h2, #inspectorScreen h2, #modeScreen h2{
     font-size:18px;
     font-weight:600;
     margin:0 0 6px;
   }
-  #projectScreen .sub, #inspectorScreen .sub{
+  #projectScreen .sub, #inspectorScreen .sub, #modeScreen .sub{
     font-size:13px;
     color:var(--muted);
     margin-bottom:28px;
@@ -417,6 +417,100 @@
     margin-top:8px;
   }
   .edit-sheet-actions .btn{flex:1;}
+
+  /* Review screen */
+  #reviewScreen main{max-width:560px;}
+  .review-item-card{
+    background:var(--surface);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:20px;
+  }
+  .review-item-card .review-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .review-item-card .review-code{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:15px;
+  }
+  .review-badge{
+    font-size:11px;
+    padding:3px 9px;
+    border-radius:20px;
+    font-weight:600;
+  }
+  .review-badge.open{background:rgba(242,162,12,0.15); color:var(--amber);}
+  .review-badge.closed{background:rgba(63,166,114,0.15); color:var(--green);}
+  .review-meta{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:10px;
+    line-height:1.6;
+  }
+  .review-photo-group{margin-bottom:12px;}
+  .review-photo-group .group-label{
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .review-photo-row{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:6px;
+  }
+  .review-photo-row img{
+    width:100%;
+    aspect-ratio:1;
+    object-fit:cover;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .review-notes-log{
+    background:var(--surface-2);
+    border-radius:6px;
+    padding:10px;
+    font-size:12px;
+    color:var(--muted);
+    white-space:pre-line;
+    margin:10px 0;
+  }
+  .review-actions{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+  }
+  .review-actions .btn{flex:1;}
+  .review-comment-panel{
+    display:none;
+    margin-top:12px;
+    border-top:1px solid var(--rule);
+    padding-top:12px;
+  }
+  .review-comment-panel.show{display:block;}
+  .review-comment-panel textarea{margin-bottom:10px;}
+  .review-photo-add-row{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:6px;
+    margin-bottom:10px;
+  }
+  .lightbox{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.9);
+    z-index:100;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .lightbox.show{display:flex;}
+  .lightbox img{max-width:100%; max-height:100%; border-radius:6px;}
 </style>
 </head>
 <body>
@@ -471,6 +565,52 @@
     <button class="btn btn-primary" id="guestAddYesBtn" style="width:100%; margin-bottom:8px;">Add permanently and continue</button>
     <button class="btn btn-ghost" id="guestAddNoBtn" style="width:100%;">Just this once</button>
   </div>
+</div>
+
+<!-- Mode selection: continue inspecting, or review already-uploaded items -->
+<div id="modeScreen">
+  <img src="app-icon-192.png" class="logo" alt="Iberia">
+  <h2 id="modeAircraftTitle">—</h2>
+  <div class="sub">What do you want to do?</div>
+
+  <div class="project-card">
+    <h3>Continue inspection</h3>
+    <div class="sub" style="margin-bottom:14px;">Capture new items as usual.</div>
+    <button class="btn btn-primary" id="goCaptureBtn" style="width:100%;">Start capturing</button>
+  </div>
+
+  <div class="project-card">
+    <h3>Review existing items</h3>
+    <div class="sub" style="margin-bottom:14px;">Enter the item number(s) to review, separated by commas (e.g. 3, 7, 12).</div>
+    <div class="field">
+      <input type="text" id="reviewItemsInput" placeholder="e.g. 3, 7, 12">
+    </div>
+    <button class="btn btn-ghost" id="loadReviewBtn" style="width:100%;">Load for review</button>
+    <div class="project-status" id="reviewLoadStatus"></div>
+  </div>
+</div>
+
+<!-- Review screen: shows loaded items with their photos and notes -->
+<div id="reviewScreen" style="display:none;">
+  <header>
+    <div class="brand">
+      <img src="app-icon-192.png" alt="Iberia">
+      <div>
+        <h1>Review items</h1>
+        <div class="tags" id="reviewAircraftTag">—</div>
+      </div>
+    </div>
+    <div class="right-col">
+      <div class="change-links">
+        <button id="backToModeBtn">Back to menu</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div id="reviewStatusMsg" class="status-msg"></div>
+    <div id="reviewItemsContainer"></div>
+    <div class="footer-space"></div>
+  </main>
 </div>
 
 <!-- Main inspection app -->
@@ -559,6 +699,11 @@
 
 </div><!-- /#appScreen -->
 
+<!-- Photo lightbox -->
+<div class="lightbox" id="lightbox">
+  <img id="lightboxImg" src="">
+</div>
+
 <!-- Delete aircraft confirmation -->
 <div class="overlay" id="deleteOverlay">
   <div class="edit-sheet">
@@ -624,7 +769,7 @@
 // ============================================================
 // CONFIG — paste your Apps Script URL here
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwIu9OqIVDOVmFzRpvpEP2216NlOwTQD4sUNbecGlvRxT3VKXhXL3e3mlJtd83JKc1l2Q/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydgDrzHWuW2GVhf_JVxfSiOHImyjcbiLvz9E-CKsiNtqqJISZoy1qNnOxcHxUKcAH0yw/exec';
 const GUEST_OPTION = 'Guest user';
 
 // Small built-in fallback used only if the server has never been reached
@@ -820,6 +965,9 @@ function openInspectorScreen() {
   document.getElementById('guestConfirmCard').style.display = 'none';
   document.getElementById('mainInspectorCard').style.display = 'block';
   renderInspectorSelects();
+  appScreen.classList.remove('show');
+  modeScreen.style.display = 'none';
+  reviewScreen.style.display = 'none';
   inspectorScreen.style.display = 'flex';
 }
 
@@ -857,8 +1005,7 @@ function finalizeInspector(name) {
   if (config.responsables.includes(name)) localStorage.setItem('inspeccionLastInspector', name);
   document.getElementById('inspectorTag').textContent = currentInspector;
   inspectorScreen.style.display = 'none';
-  appScreen.classList.add('show');
-  updateStatusLine();
+  openModeScreen();
 }
 
 // Añade un nombre nuevo a la lista de inspectores, de forma definitiva
@@ -883,9 +1030,268 @@ document.getElementById('changeInspectorBtn').addEventListener('click', () => {
   openInspectorScreen();
 });
 
+// ============================================================
+// Mode screen: continue capturing, or review already-uploaded items
+// ============================================================
+const modeScreen = document.getElementById('modeScreen');
+const reviewScreen = document.getElementById('reviewScreen');
+const reviewItemsInput = document.getElementById('reviewItemsInput');
+const reviewLoadStatus = document.getElementById('reviewLoadStatus');
+const loadReviewBtn = document.getElementById('loadReviewBtn');
+
+function openModeScreen() {
+  document.getElementById('modeAircraftTitle').textContent = currentMatricula || '—';
+  reviewItemsInput.value = '';
+  reviewLoadStatus.textContent = '';
+  reviewLoadStatus.className = 'project-status';
+  appScreen.classList.remove('show');
+  reviewScreen.style.display = 'none';
+  modeScreen.style.display = 'flex';
+}
+
+document.getElementById('goCaptureBtn').addEventListener('click', () => {
+  modeScreen.style.display = 'none';
+  appScreen.classList.add('show');
+  updateStatusLine();
+});
+
+document.getElementById('backToModeBtn').addEventListener('click', () => {
+  openModeScreen();
+});
+
+loadReviewBtn.addEventListener('click', async () => {
+  const raw = reviewItemsInput.value.trim();
+  if (!raw) {
+    reviewLoadStatus.textContent = 'Enter at least one item number.';
+    reviewLoadStatus.className = 'project-status err';
+    return;
+  }
+  const itemList = raw.split(/[,\s]+/).filter(Boolean);
+  if (APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
+    reviewLoadStatus.textContent = 'The Apps Script URL is not configured yet.';
+    reviewLoadStatus.className = 'project-status err';
+    return;
+  }
+  loadReviewBtn.disabled = true;
+  loadReviewBtn.textContent = 'Loading…';
+  reviewLoadStatus.textContent = 'Preloading ' + itemList.length + ' item(s) for offline review…';
+  reviewLoadStatus.className = 'project-status';
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getItemsForReview', matricula: currentMatricula, items: itemList })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      reviewLoadStatus.textContent = 'Error: ' + (data.error || 'unknown');
+      reviewLoadStatus.className = 'project-status err';
+      return;
+    }
+    await reviewCacheClear();
+    for (const item of data.items) {
+      await reviewCacheSet(item);
+    }
+    openReviewScreen(data.items);
+  } catch (err) {
+    reviewLoadStatus.textContent = 'Could not connect. Check your connection and try again.';
+    reviewLoadStatus.className = 'project-status err';
+  } finally {
+    loadReviewBtn.disabled = false;
+    loadReviewBtn.textContent = 'Load for review';
+  }
+});
+
+// ---------- Review screen ----------
+let reviewCommentState = {}; // { itemCode: { photos: [] } }
+
+async function openReviewScreen(items) {
+  document.getElementById('reviewAircraftTag').textContent = currentMatricula || '—';
+  modeScreen.style.display = 'none';
+  reviewScreen.style.display = 'block';
+  renderReviewItems(items);
+}
+
+function renderReviewItems(items) {
+  const container = document.getElementById('reviewItemsContainer');
+  container.innerHTML = '';
+  items.forEach((item) => {
+    if (!item.found) {
+      const missing = document.createElement('div');
+      missing.className = 'review-item-card';
+      missing.innerHTML = `<div class="review-code">${escapeHtml(item.item)}</div><div class="review-meta">Not found for this aircraft.</div>`;
+      container.appendChild(missing);
+      return;
+    }
+    reviewCommentState[item.item] = reviewCommentState[item.item] || { photos: [] };
+    container.appendChild(buildReviewCard(item));
+  });
+}
+
+function buildReviewCard(item) {
+  const card = document.createElement('div');
+  card.className = 'review-item-card';
+  const isClosed = (item.estado || '').toLowerCase() === 'closed';
+
+  const photoGroups = [{ label: 'Original photos', photos: item.photos || [] }]
+    .concat((item.reviewPhotos || []).map(g => ({ label: g.label, photos: g.photos })));
+
+  const photoGroupsHtml = photoGroups.filter(g => g.photos.length).map(g => `
+    <div class="review-photo-group">
+      <div class="group-label">${escapeHtml(g.label)}</div>
+      <div class="review-photo-row">
+        ${g.photos.map(p => `<img src="data:${p.mimeType};base64,${p.base64}" data-full="data:${p.mimeType};base64,${p.base64}">`).join('')}
+      </div>
+    </div>`).join('');
+
+  card.innerHTML = `
+    <div class="review-head">
+      <span class="review-code">${escapeHtml(item.item)}</span>
+      <span class="review-badge ${isClosed ? 'closed' : 'open'}">${isClosed ? 'Closed' : 'Open'}</span>
+    </div>
+    <div class="review-meta">
+      ATA ${escapeHtml(item.ata)} · ${escapeHtml(item.area)}${item.subarea ? ' · ' + escapeHtml(item.subarea) : ''}<br>
+      ${escapeHtml(item.descripcion)}${item.descripcionEn ? '<br><em>' + escapeHtml(item.descripcionEn) + '</em>' : ''}<br>
+      Rectification: ${escapeHtml(item.rectification || '—')} · Inspector: ${escapeHtml(item.responsable || '—')}
+    </div>
+    ${photoGroupsHtml}
+    ${item.revisionNotes ? `<div class="review-notes-log">${escapeHtml(item.revisionNotes)}</div>` : ''}
+    <div class="review-actions">
+      <button class="btn btn-primary review-close-btn" ${isClosed ? 'disabled' : ''}>${isClosed ? 'Already closed' : 'Close discrepancy'}</button>
+      <button class="btn btn-ghost review-comment-toggle">Add comment / photos</button>
+    </div>
+    <div class="review-comment-panel">
+      <label class="field-label">Comment</label>
+      <textarea class="review-comment-input" placeholder="What did you find / do?"></textarea>
+      <div class="review-photo-add-row"></div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button class="btn btn-ghost review-camera-btn" style="flex:1;">📷 Camera</button>
+        <button class="btn btn-ghost review-gallery-btn" style="flex:1;">🖼️ Gallery</button>
+      </div>
+      <input type="file" class="review-camera-input" accept="image/*" capture="environment" style="display:none;">
+      <input type="file" class="review-gallery-input" accept="image/*" multiple style="display:none;">
+      <button class="btn btn-primary review-save-btn" style="width:100%;">Save review</button>
+      <div class="project-status review-save-status"></div>
+    </div>
+  `;
+
+  const code = item.item;
+
+  card.querySelectorAll('.review-photo-row img').forEach(img => {
+    img.addEventListener('click', () => openLightbox(img.dataset.full));
+  });
+
+  card.querySelector('.review-close-btn').addEventListener('click', () => {
+    submitReview(code, { close: true }, card);
+  });
+
+  const commentPanel = card.querySelector('.review-comment-panel');
+  card.querySelector('.review-comment-toggle').addEventListener('click', () => {
+    commentPanel.classList.toggle('show');
+  });
+
+  const addRow = card.querySelector('.review-photo-add-row');
+  function renderReviewPhotoRow() {
+    addRow.innerHTML = reviewCommentState[code].photos.map((src, i) => `
+      <div class="photo-thumb"><img src="${src}"><button type="button" class="remove-photo" data-idx="${i}">×</button></div>
+    `).join('');
+    addRow.querySelectorAll('.remove-photo').forEach(btn => btn.addEventListener('click', (e) => {
+      reviewCommentState[code].photos.splice(Number(e.currentTarget.dataset.idx), 1);
+      renderReviewPhotoRow();
+    }));
+  }
+
+  const camInput = card.querySelector('.review-camera-input');
+  const galInput = card.querySelector('.review-gallery-input');
+  card.querySelector('.review-camera-btn').addEventListener('click', () => camInput.click());
+  card.querySelector('.review-gallery-btn').addEventListener('click', () => galInput.click());
+  camInput.addEventListener('change', async (e) => {
+    await addReviewPhotoFiles(code, e.target.files);
+    renderReviewPhotoRow();
+    camInput.value = '';
+  });
+  galInput.addEventListener('change', async (e) => {
+    await addReviewPhotoFiles(code, e.target.files);
+    renderReviewPhotoRow();
+    galInput.value = '';
+  });
+
+  const saveStatus = card.querySelector('.review-save-status');
+  card.querySelector('.review-save-btn').addEventListener('click', () => {
+    const comment = card.querySelector('.review-comment-input').value.trim();
+    const photos = reviewCommentState[code].photos;
+    if (!comment && !photos.length) {
+      saveStatus.textContent = 'Write a comment or add a photo first.';
+      saveStatus.className = 'project-status err';
+      return;
+    }
+    submitReview(code, { comment, photos }, card);
+  });
+
+  return card;
+}
+
+async function addReviewPhotoFiles(code, fileList) {
+  const files = Array.from(fileList);
+  for (const file of files) {
+    try {
+      const dataUrl = await resizeImage(file, 1600, 0.72);
+      reviewCommentState[code].photos.push(dataUrl);
+    } catch (err) {
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.readAsDataURL(file);
+      });
+      reviewCommentState[code].photos.push(dataUrl);
+    }
+  }
+}
+
+// Review actions go through the same instant-queue-then-background-sync
+// system as new items, so they work offline too and are safe to retry.
+async function submitReview(itemCode, extra, card) {
+  const payload = Object.assign({
+    action: 'reviewItem',
+    clientId: uuid(),
+    matricula: currentMatricula,
+    itemNumber: itemCode
+  }, extra);
+
+  await queueAdd(payload);
+  const status = card.querySelector('.review-save-status');
+  if (status) {
+    status.textContent = 'Saved. Uploading in the background…';
+    status.className = 'project-status ok';
+  }
+  if (extra.close) {
+    card.querySelector('.review-close-btn').disabled = true;
+    card.querySelector('.review-close-btn').textContent = 'Already closed';
+    card.querySelector('.review-badge').className = 'review-badge closed';
+    card.querySelector('.review-badge').textContent = 'Closed';
+  }
+  if (extra.photos && extra.photos.length) {
+    reviewCommentState[itemCode].photos = [];
+  }
+  updateStatusLine();
+  trySyncQueue();
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('show');
+}
+document.getElementById('lightbox').addEventListener('click', () => {
+  document.getElementById('lightbox').classList.remove('show');
+});
+
+
+
 document.getElementById('changeAircraftBtn').addEventListener('click', () => {
   appScreen.classList.remove('show');
   inspectorScreen.style.display = 'none';
+  modeScreen.style.display = 'none';
+  reviewScreen.style.display = 'none';
   projectScreen.style.display = 'flex';
   currentMatricula = null;
   currentInspector = null;
@@ -1118,19 +1524,56 @@ translateBtn.addEventListener('click', async () => {
 // ============================================================
 const DB_NAME = 'inspeccionQueueDB';
 const STORE_NAME = 'pending';
+const REVIEW_STORE_NAME = 'reviewCache';
 let dbPromise = null;
 
 function openQueueDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(REVIEW_STORE_NAME)) {
+        db.createObjectStore(REVIEW_STORE_NAME, { keyPath: 'item' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
+}
+
+async function reviewCacheSet(itemObj) {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(REVIEW_STORE_NAME, 'readwrite');
+    tx.objectStore(REVIEW_STORE_NAME).put(itemObj);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function reviewCacheGetAll() {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(REVIEW_STORE_NAME, 'readonly');
+    const req = tx.objectStore(REVIEW_STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function reviewCacheClear() {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(REVIEW_STORE_NAME, 'readwrite');
+    tx.objectStore(REVIEW_STORE_NAME).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 async function queueAdd(payload) {
